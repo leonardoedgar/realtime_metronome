@@ -19,28 +19,23 @@ typedef struct
 int readArrow();
 freqLimit getFreqLimit();
 setting getfrequency(setting userSetting);
-int adjustFreq(setting usersetting);
+int adjustFreq(setting userSetting);
 
 char *tempo[] = {"", "Larghissimo", "Grave", "Lento", "Larghetto", "Adagio", "Andante", "Allegro", "Vivace", "Presto", "Prestissimo"};
 int BPM[] = {0, 12, 35, 53, 64, 72, 93, 133, 167, 189, 351};
-
-// struct userinput
-// {
-//   char tempmode[1024];
-//   int mode;
-//   int bpm;
-// };
+int minBPM[] = {0, 0, 25, 46, 61, 67, 77, 109, 157, 177, 201};
+int maxBPM[] = {0, 24, 45, 60, 66, 76, 108, 156, 176, 200, 500};
 
 void printtempo()
 {
     int i;
     printf("List of tempo\n");
-    printf("===============================================\n");
-    printf("\tMode  \t\tTempo\t\tBPM\n");
-    printf("===============================================\n");
+    printf("===================================================================\n");
+    printf("\tMode  \t\tTempo\t\tBPM\t\tRange\n");
+    printf("===================================================================\n");
     for (i = 1; i <= 10; i++)
     {
-        printf("\t%2d\t%14s\t\t%3d\n", i, tempo[i], BPM[i]);
+        printf("\t%2d\t%14s\t\t%3d\t     %3d ~ %3d\n", i, tempo[i], BPM[i], minBPM[i], maxBPM[i]);
     }
 }
 
@@ -49,18 +44,14 @@ int main(void)
     setting userSetting;
 
     userSetting = getfrequency(userSetting);
-    // userSetting.frequency = 52;
-    // userSetting.modenum = 3;
-    printf("%d\n", userSetting.frequency);
     userSetting.frequency = adjustFreq(userSetting);
-
-    printf("The current frequency is %d", userSetting.frequency);
 
     return 0;
 }
 
 setting getfrequency(setting userSetting)
 {
+    // Print out the list to choose modenum and basical frequency
     printtempo();
     do
     {
@@ -78,23 +69,23 @@ setting getfrequency(setting userSetting)
 }
 
 int readArrow()
-{
-    int int_1;
-    int int_2;
-    int int_3;
+{   
+    // Read the up and down arrow key to adjust frequency
+    int int_1 = 0;
+    int int_2 = 0;
+    int int_3 = 0;
 
     printf("Please using up and down key to adjust the frequency you want.\n");
     system("/bin/stty raw");
     scanf("%d", &int_3);
     int_1 = getchar();
-    int_2 = getchar();
-    int_3 = getchar();
-    system("/bin/stty cooked");
-
-    if (int_1 != 27)
+    if (int_1 == 27)
     {
-        printf("\nPlease enter an arrow key.\n");
+        int_2 = getchar();
+        int_3 = getchar();
+        printf("\r          ");
     }
+    system("/bin/stty cooked");
 
     return int_3;
 }
@@ -150,45 +141,58 @@ freqLimit getFreqLimit(int modenum)
     return frequencyRange;
 }
 
-int adjustFreq(setting usersetting)
+int adjustFreq(setting userSetting)
 {
     int input;
+    int status = 1;
 
     freqLimit frequencyRange;
-    frequencyRange = getFreqLimit(usersetting.modenum);
-    input = readArrow();
-    printf("\n");
-    switch (input)
+    frequencyRange = getFreqLimit(userSetting.modenum);
+    while (status)
     {
-    case 65:
-        printf("Up!\n");
-        if (frequencyRange.min < usersetting.frequency && usersetting.frequency < frequencyRange.max)
+        input = readArrow();
+        switch (input)
         {
-            usersetting.frequency++;
-        }
-        else
-        {
-            printf("Limit reached\n");
-        }
+        case 65:
+            printf("\n");
+            if (userSetting.frequency < frequencyRange.max)
+            {
+                userSetting.frequency++;
+            }
+            else
+            {
+                printf("[WARN]  Maximum limit reached, can't add more.\n");
+            }
+            break;
+        case 66:
+            printf("\n");
+            if (frequencyRange.min < userSetting.frequency)
+            {
+                userSetting.frequency--;
+            }
+            else
+            {   
+                printf("[WARN]  Minimum limit reached, can't reduce more.\n");
+            }
+            break;
+        case 67:
+            printf("Right!\n");
+            break;
+        case 68:
+            printf("Left!\n");
+            break;
+        case 'q':
+            status = 0;
 
-        break;
-    case 66:
-        printf("Down!\n");
-        if (frequencyRange.min < usersetting.frequency && usersetting.frequency < frequencyRange.max)
-        {
-            usersetting.frequency--;
+            break;
+        default:
+            status = 0;
+            printf("end editing\n");
+            break;
         }
-        else
-        {
-            printf("Limit reached\n");
-        }
-        break;
-    case 67:
-        printf("Right!\n");
-        break;
-    case 68:
-        printf("Left!\n");
-        break;
+        printf("The current frequency is %d.\n", userSetting.frequency);
+        fflush(stdout);
     }
-    return usersetting.frequency;
+
+    return userSetting.frequency;
 }
