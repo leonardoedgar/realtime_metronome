@@ -3,14 +3,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-int get_config(char* config) {
+int get_config(char* filename, char* config) {
     FILE *stream;
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
     bool keyFound;
     int configData = 0;
-    stream = fopen("config.txt", "r");
+    stream = fopen(filename, "r");
     if (stream == NULL) {
         printf("FileNotFound\n");
     }
@@ -31,9 +31,9 @@ int get_config(char* config) {
 }
 
 int main() {
-    int bpm = get_config("BPM");
+    int bpm = get_config("config.txt", "BPM");
     printf("BPM = %d\n", bpm);
-    int apple = get_config("APPLE");
+    int apple = get_config("config.txt", "APPLE");
     printf("APPLE = %d\n", apple);
     return 0;
 }
