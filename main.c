@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+
+// Output color definition
+#define KRED  "\x1B[31m"
+#define KYEL  "\x1B[33m"
+#define KWHT  "\x1B[37m"
 // Type define
 typedef struct
 {
@@ -161,7 +166,8 @@ int adjustFreq(setting userSetting)
             }
             else
             {
-                printf("[WARN]  Maximum limit reached, can't add more.\n");
+                printf(KYEL "[WARN]");
+                printf(KWHT "   Maximum limit reached, can't add more.\n");
             }
             break;
         case 66:
@@ -172,7 +178,8 @@ int adjustFreq(setting userSetting)
             }
             else
             {   
-                printf("[WARN]  Minimum limit reached, can't reduce more.\n");
+                printf(KYEL "[WARN]");
+                printf(KWHT "   Minimum limit reached, can't reduce more.\n");
             }
             break;
         case 67:
