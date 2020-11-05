@@ -3,6 +3,7 @@
 
 
 // Output color definition
+#define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
 #define KYEL  "\x1B[33m"
 #define KWHT  "\x1B[37m"
@@ -166,8 +167,7 @@ int adjustFreq(setting userSetting)
             }
             else
             {
-                printf(KYEL "[WARN]");
-                printf(KWHT "   Maximum limit reached, can't add more.\n");
+                printf(KYEL "[WARN]   Maximum limit reached, can't add more.\n" KNRM);
             }
             break;
         case 66:
@@ -178,8 +178,7 @@ int adjustFreq(setting userSetting)
             }
             else
             {   
-                printf(KYEL "[WARN]");
-                printf(KWHT "   Minimum limit reached, can't reduce more.\n");
+                printf(KYEL "[WARN]   Minimum limit reached, can't reduce more.\n" KNRM);
             }
             break;
         case 67:
