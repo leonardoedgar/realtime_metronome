@@ -71,16 +71,35 @@ int main(void)
     return 0;
 }
 
-setting getfrequency(setting userSetting)
-{
-    // Print out the list to choose modeNum and basical frequency
-    printTempo();
-    bool exitLoop = userSetting.modeNum != 0;
-    double verySmallDouble = 1e-6;
+void printTempo() {
+    int i;
+    printf("List of tempo\n");
+    printf("===================================================================\n");
+    printf("\tMode  \t\tTempo\t\tBPM\t\tRange\n");
+    printf("===================================================================\n");
+    for (i = 1; i <= 10; i++)
+    {
+        printf("\t%2d\t%14s\t\t%3d\t     %3d ~ %3d\n", i, tempo[i], BPM[i], minBPM[i], maxBPM[i]);
+    }
+}
+
+setting getfrequency(setting userSetting) {
+	double verySmallDouble = 1e-6;
+	bool exitLoop;
+	
+	printTempo();
+	
+    if (userSetting.modeNum != 0) {
+    	exitLoop = true;
+    }
+    else {
+    	exitLoop = false;
+    }
+   
     do
     {
         printf("Please choose tempo mode: ");
-        if (fgets(userSetting.modetemp, 1024, stdin) != NULL) {
+        if (!fgets(userSetting.modetemp, 1024, stdin)) {
             printf("data: %s\n", userSetting.modetemp);
         }
         else if (fabs(atoi(userSetting.modetemp) - atof(userSetting.modetemp)) > verySmallDouble) {
@@ -94,7 +113,7 @@ setting getfrequency(setting userSetting)
         }
         pthread_mutex_lock( &mutex );
         exitLoop = terminateProgram;
-        printf("%d\n", terminateProgram);
+        //printf("%d\n", terminateProgram);
         pthread_mutex_unlock( &mutex );
     } while (userSetting.modeNum == 0 && !exitLoop);
     printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency = BPM[userSetting.modeNum]);
@@ -117,7 +136,7 @@ int readArrow()
         int_3 = getchar();
         printf("\r          ");
     }
-    system("/bin/stty cooked");
+    system("/bin/stty edit");
 
     return int_3;
 }
@@ -175,12 +194,15 @@ freqLimit getFreqLimit(int modeNum)
 
 int adjustFreq(setting userSetting)
 {
-    int input, i;
+    int input, i, rtn;
+    freqLimit frequencyRange;
+    struct itimerspec timerInfo;
     bool exitLoop;
+    
     pthread_mutex_lock( &mutex );
     exitLoop = terminateProgram;
     pthread_mutex_unlock( &mutex );
-    freqLimit frequencyRange;
+    
     frequencyRange = getFreqLimit(userSetting.modeNum);
     printf("Please use arrow up and down key to adjust the frequency you want.\n\n");
     printf("Audio: ");
@@ -198,16 +220,15 @@ int adjustFreq(setting userSetting)
                 printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
                 printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf("                                                                  \n");
-                for(i=0; i<200; i++) {
+                for(i=0; i<100; i++) {
                     printf(" ");
                 }
                 printf("\rAudio: ");
-                struct itimerspec timerInfo;
-                int rtn;
+                
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-                timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+                timerInfo.it_value.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
                 timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-                timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+                timerInfo.it_interval.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
                 rtn = timer_settime(timerid, 0, &timerInfo, NULL);
                 if( rtn == -1 ) {
                     printf("\nError setting timer!\n");
@@ -220,10 +241,10 @@ int adjustFreq(setting userSetting)
                 printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf(KYEL "[WARN]   Maximum limit reached, can't add more.\n" KNRM);
                 printf("Audio: ");
-                for(i=0; i<195; i++) {
+                for(i=0; i<100; i++) {
                     printf(" ");
                 }
-                for(i=0; i<195; i++) {
+                for(i=0; i<100; i++) {
                     printf("\b");
                 }
             }
@@ -237,16 +258,14 @@ int adjustFreq(setting userSetting)
                 printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
                 printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf("                                                                  \n");
-                for(i=0; i<200; i++) {
+                for(i=0; i<100; i++) {
                     printf(" ");
                 }
                 printf("\rAudio: ");
-                struct itimerspec timerInfo;
-                int rtn;
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-                timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+                timerInfo.it_value.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
                 timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-                timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+                timerInfo.it_interval.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
                 rtn = timer_settime(timerid, 0, &timerInfo, NULL);
                 if( rtn == -1 ) {
                     printf("\nError setting timer!\n");
@@ -259,10 +278,10 @@ int adjustFreq(setting userSetting)
                 printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf(KYEL "[WARN]   Minimum limit reached, can't reduce more.\n" KNRM);
                 printf("Audio: ");
-                for(i=0; i<195; i++) {
+                for(i=0; i<100; i++) {
                     printf(" ");
                 }
-                for(i=0; i<195; i++) {
+                for(i=0; i<100; i++) {
                     printf("\b");
                 }
             }
@@ -293,31 +312,18 @@ int adjustFreq(setting userSetting)
     return userSetting.frequency;
 }
 
-void printTempo()
-{
-    int i;
-    printf("List of tempo\n");
-    printf("===================================================================\n");
-    printf("\tMode  \t\tTempo\t\tBPM\t\tRange\n");
-    printf("===================================================================\n");
-    for (i = 1; i <= 10; i++)
-    {
-        printf("\t%2d\t%14s\t\t%3d\t     %3d ~ %3d\n", i, tempo[i], BPM[i], minBPM[i], maxBPM[i]);
-    }
-}
-
 void* SpawnUserInputThread( void* arg ) {
+    struct itimerspec timerInfo;
+    int rtn;
     pthread_mutex_lock( &mutex );
     numThreadsAlive++;
     pthread_mutex_unlock( &mutex );
     printf("Start user input thread\n");
     userSetting = getfrequency(userSetting);
-    struct itimerspec timerInfo;
-    int rtn;
     timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-    timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+    timerInfo.it_value.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
     timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-    timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
+    timerInfo.it_interval.tv_nsec = ((long long)60*BILLION/userSetting.frequency - (long long)timerInfo.it_value.tv_sec*BILLION);
     rtn = timer_settime(timerid, 0, &timerInfo, NULL);
     if( rtn == -1 ) {
         printf( "\nError setting timer!\n" );
