@@ -76,7 +76,7 @@ setting getfrequency(setting userSetting)
     printTempo();
     do
     {
-        printf("Please choose tempo mode:");
+        printf("Please choose tempo mode: ");
         if (!fgets(userSetting.modetemp, 1024, stdin))
         {
             continue;
@@ -96,7 +96,6 @@ int readArrow()
     int int_2 = 0;
     int int_3 = 0;
 
-    printf("Please using up and down key to adjust the frequency you want.\n");
     system("/bin/stty raw");
     scanf("%d", &int_3);
     int_1 = getchar();
@@ -164,23 +163,33 @@ freqLimit getFreqLimit(int modeNum)
 
 int adjustFreq(setting userSetting)
 {
-    int input;
+    int input, i;
     bool exitLoop;
     pthread_mutex_lock( &mutex );
     exitLoop = terminateProgram;
     pthread_mutex_unlock( &mutex );
     freqLimit frequencyRange;
     frequencyRange = getFreqLimit(userSetting.modeNum);
+    printf("Please use arrow up and down key to adjust the frequency you want.\n\n");
+    printf("Audio: ");
     while (!exitLoop)
     {
         input = readArrow();
         switch (input)
         {
         case 65:
-            printf("\n");
+            printf("\033[3A");
+            printf("\r");
             if (userSetting.frequency < frequencyRange.max)
             {
                 userSetting.frequency++;
+                printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
+                printf("Please use arrow up and down key to adjust the frequency you want.\n");
+                printf("                                                                  \n");
+                for(i=0; i<200; i++) {
+                    printf(" ");
+                }
+                printf("\rAudio: ");
                 struct itimerspec timerInfo;
                 int rtn;
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
@@ -195,14 +204,31 @@ int adjustFreq(setting userSetting)
             }
             else
             {
+                printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
+                printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf(KYEL "[WARN]   Maximum limit reached, can't add more.\n" KNRM);
+                printf("Audio: ");
+                for(i=0; i<195; i++) {
+                    printf(" ");
+                }
+                for(i=0; i<195; i++) {
+                    printf("\b");
+                }
             }
             break;
         case 66:
-            printf("\n");
+            printf("\033[3A");
+            printf("\r");
             if (frequencyRange.min < userSetting.frequency)
             {
                 userSetting.frequency--;
+                printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
+                printf("Please use arrow up and down key to adjust the frequency you want.\n");
+                printf("                                                                  \n");
+                for(i=0; i<200; i++) {
+                    printf(" ");
+                }
+                printf("\rAudio: ");
                 struct itimerspec timerInfo;
                 int rtn;
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
@@ -217,7 +243,16 @@ int adjustFreq(setting userSetting)
             }
             else
             {
+                printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency);
+                printf("Please use arrow up and down key to adjust the frequency you want.\n");
                 printf(KYEL "[WARN]   Minimum limit reached, can't reduce more.\n" KNRM);
+                printf("Audio: ");
+                for(i=0; i<195; i++) {
+                    printf(" ");
+                }
+                for(i=0; i<195; i++) {
+                    printf("\b");
+                }
             }
             break;
         case 67:
@@ -238,13 +273,12 @@ int adjustFreq(setting userSetting)
             printf("end editing\n");
             break;
         }
-        printf("The current frequency is %d.\n", userSetting.frequency);
+//        printf("The current frequency is %d.\n", userSetting.frequency);
         fflush(stdout);
         pthread_mutex_lock( &mutex );
         exitLoop = terminateProgram;
         pthread_mutex_unlock( &mutex );
     }
-
     return userSetting.frequency;
 }
 
@@ -326,10 +360,13 @@ void PrintAudio( int signum ) {
     if (count >= 4) {
         int i;
         printf("\r");
-        for(i=0; i<numOfChar; i++) {
+        printf("Audio: ");
+        for(i=0; i<195; i++) {
             printf(" ");
         }
-        printf("\r");
+        for(i=0; i<195; i++) {
+            printf("\b");
+        }
         numOfChar = 0;
         count = 0;
     }
