@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <math.h>
 
 // Output color definition
 #define KNRM  "\x1B[0m"
@@ -55,9 +56,9 @@ int maxBPM[] = {0, 24, 45, 60, 66, 76, 108, 156, 176, 200, 500};
 int main(void)
 {
     bool exitLoop;
+    signal( SIGINT, SignalHandler );
     pthread_create(&(tid[0]), NULL, SpawnAudioThread, NULL );
     pthread_create(&(tid[1]), NULL, SpawnUserInputThread, NULL );
-    signal( SIGINT, SignalHandler );
     sleep(1);
     pthread_mutex_lock( &mutex );
     exitLoop = numThreadsAlive == 0;
@@ -74,17 +75,28 @@ setting getfrequency(setting userSetting)
 {
     // Print out the list to choose modeNum and basical frequency
     printTempo();
+    bool exitLoop = userSetting.modeNum != 0;
+    double verySmallDouble = 1e-6;
     do
     {
         printf("Please choose tempo mode: ");
-        if (!fgets(userSetting.modetemp, 1024, stdin))
-        {
-            continue;
+        if (fgets(userSetting.modetemp, 1024, stdin) != NULL) {
+            printf("data: %s\n", userSetting.modetemp);
         }
-        userSetting.modeNum = atoi(userSetting.modetemp);
-        if (userSetting.modeNum > 9)
-            userSetting.modeNum = 0;
-    } while (userSetting.modeNum == 0);
+        else if (fabs(atoi(userSetting.modetemp) - atof(userSetting.modetemp)) > verySmallDouble) {
+            printf("Input is a floating point number.\n");
+        }
+        else if (atoi(userSetting.modetemp) > 10 || atoi(userSetting.modetemp) < 1) {
+            printf("Setting is not within the valid range (1-10).\n");
+        }
+        else {
+            userSetting.modeNum = atoi(userSetting.modetemp);
+        }
+        pthread_mutex_lock( &mutex );
+        exitLoop = terminateProgram;
+        printf("%d\n", terminateProgram);
+        pthread_mutex_unlock( &mutex );
+    } while (userSetting.modeNum == 0 && !exitLoop);
     printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency = BPM[userSetting.modeNum]);
     return userSetting;
 }
@@ -273,7 +285,6 @@ int adjustFreq(setting userSetting)
             printf("end editing\n");
             break;
         }
-//        printf("The current frequency is %d.\n", userSetting.frequency);
         fflush(stdout);
         pthread_mutex_lock( &mutex );
         exitLoop = terminateProgram;
