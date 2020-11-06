@@ -11,6 +11,9 @@
 #define KRED  "\x1B[31m"
 #define KYEL  "\x1B[33m"
 #define KWHT  "\x1B[37m"
+
+#define BILLION		1000000000L
+
 // Type define
 typedef struct
 {
@@ -33,7 +36,7 @@ int adjustFreq(setting userSetting);
 void printTempo();
 void* SpawnUserInputThread( void* arg );
 void* SpawnAudioThread( void* arg );
-void signal_handler( int signum );
+void SignalHandler( int signum );
 void PrintAudio( int signum );
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -54,7 +57,7 @@ int main(void)
     bool exitLoop;
     pthread_create(&(tid[0]), NULL, SpawnAudioThread, NULL );
     pthread_create(&(tid[1]), NULL, SpawnUserInputThread, NULL );
-    signal( SIGINT, signal_handler );
+    signal( SIGINT, SignalHandler );
     sleep(1);
     pthread_mutex_lock( &mutex );
     exitLoop = numThreadsAlive == 0;
@@ -181,9 +184,9 @@ int adjustFreq(setting userSetting)
                 struct itimerspec timerInfo;
                 int rtn;
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-                timerInfo.it_value.tv_nsec = 0;
+                timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
                 timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-                timerInfo.it_interval.tv_nsec = 0;
+                timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
                 rtn = timer_settime(timerid, 0, &timerInfo, NULL);
                 if( rtn == -1 ) {
                     printf("\nError setting timer!\n");
@@ -203,9 +206,9 @@ int adjustFreq(setting userSetting)
                 struct itimerspec timerInfo;
                 int rtn;
                 timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-                timerInfo.it_value.tv_nsec = 0;
+                timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
                 timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-                timerInfo.it_interval.tv_nsec = 0;
+                timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
                 rtn = timer_settime(timerid, 0, &timerInfo, NULL);
                 if( rtn == -1 ) {
                     printf("\nError setting timer!\n");
@@ -267,12 +270,15 @@ void* SpawnUserInputThread( void* arg ) {
     struct itimerspec timerInfo;
     int rtn;
     timerInfo.it_value.tv_sec= 60/userSetting.frequency;
-    timerInfo.it_value.tv_nsec = 0;
+    timerInfo.it_value.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
     timerInfo.it_interval.tv_sec = 60/userSetting.frequency;
-    timerInfo.it_interval.tv_nsec = 0;
+    timerInfo.it_interval.tv_nsec = (60*BILLION/userSetting.frequency - timerInfo.it_value.tv_sec*BILLION);
     rtn = timer_settime(timerid, 0, &timerInfo, NULL);
     if( rtn == -1 ) {
-        printf( "\nError setting timer!\n" ); exit(1);
+        printf( "\nError setting timer!\n" );
+        pthread_mutex_lock( &mutex );
+        terminateProgram = true;
+        pthread_mutex_unlock( &mutex );
     }
     userSetting.frequency = adjustFreq(userSetting);
     printf("End user input thread\n");
@@ -292,7 +298,9 @@ void* SpawnAudioThread( void* arg ) {
     signal( SIGALRM, PrintAudio ); // Set handling for exceptional conditions
     if (timer_create( CLOCK_REALTIME, NULL, &timerid ) == -1 ) {
         printf( "Error: Failed to create timer\n" );
-        exit( -1 );
+        pthread_mutex_lock( &mutex );
+        terminateProgram = true;
+        pthread_mutex_unlock( &mutex );
     }
     while(!exitLoop) {
         pthread_mutex_lock( &mutex );
@@ -307,7 +315,7 @@ void* SpawnAudioThread( void* arg ) {
     pthread_exit(NULL);
 }
 
-void signal_handler( int signum ) {
+void SignalHandler( int signum ) {
     printf( "Ctrl-C raised.\n" );
     pthread_mutex_lock( &mutex );
     terminateProgram = true;
@@ -327,11 +335,13 @@ void PrintAudio( int signum ) {
     }
     if(count%2) {
         printf("bob ");
+        putchar(7);
         fflush(stdout);
         numOfChar += 4;
     }
     else {
         printf("beep ");
+        putchar(7);
         fflush(stdout);
         numOfChar += 5;
     }
