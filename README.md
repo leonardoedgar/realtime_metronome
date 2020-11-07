@@ -39,3 +39,8 @@ gcc -o main main.c -lrt -lpthread
 ```bash
 ./main
 ```
+
+* To run the executable with loading & saving the metronome's setting into a configuration file
+```bash
+./main --config config.txt
+```
