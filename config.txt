@@ -1,7 +1,2 @@
 MODE=8
 FREQUENCY=10
-
-load and save config file
-BEEP BOB diff color
-colored warning invalid user input
-BPM display diff color
