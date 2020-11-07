@@ -197,8 +197,8 @@ void PrintTempo() {
 }
 
 setting GetFrequency(setting metronomeSetting) {
-	bool exitLoop = metronomeSetting.modeNum != 0;
-	char modeStr[1024];
+    bool exitLoop = metronomeSetting.modeNum != 0;
+    char modeStr[1024];
     do {
         printf("Choose tempo mode: ");
         if (!fgets(modeStr, 1024, stdin)) {
@@ -259,8 +259,7 @@ int AdjustFreq(setting metronomeSetting) {
     printf("Audio: ");
     while (!exitLoop) {
         input = ReadArrow();
-        switch (input)
-        {
+        switch (input) {
         case 65:
             if (metronomeSetting.frequency < frequencyRange.max) {
                 metronomeSetting.frequency++;
