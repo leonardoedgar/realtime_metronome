@@ -23,7 +23,7 @@
 #define QNX_TERMINAL_WIDTH 100
 #define UBUNTU_ID 2
 #define UBUNTU_TERMINAL_WIDTH 195
-#define PLATFORM_ID UBUNTU_ID
+#define PLATFORM_ID QNX_ID
 
 #if PLATFORM_ID == QNX_ID
 #define TERMINAL_WIDTH QNX_TERMINAL_WIDTH
@@ -129,6 +129,15 @@ bool IsMetronomeModeNumValid(int modeNum);
  */
 bool IsMetronomeFrequencyValid(int modeNum, int frequency);
 
+/**
+ * A function to save the metronome setting to a file.
+ * @param filePath indicates the path to the file to save the settting to
+ * @param metronomeSetting indicates the metronome setting to be saved
+ * @return true for a successful saving, otherwise false
+ */
+bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting);
+
+
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t tid[2];
 bool terminateProgram = false;
@@ -165,6 +174,11 @@ int main(int argc, char* argv[]) {
             pthread_mutex_lock(&mutex);
             exitProgram = numThreadsAlive == 0;
             pthread_mutex_unlock(&mutex);
+        }
+        if(configFilePath != NULL) {
+            if(!SaveMetronomeSetting(configFilePath, &metronomeSetting)) {
+                printf("Failed to save the latest metronome setting into the file: %s\n", configFilePath);
+            }
         }
     }
     free(configFilePath);
@@ -312,6 +326,7 @@ void* SpawnUserInputThread(void* defaultSetting) {
     }
     printf("Your tempo: %s, corresponding BPM: %d\n", tempo[metronomeSetting.modeNum], metronomeSetting.frequency);
     metronomeSetting.frequency = AdjustFreq(metronomeSetting);
+    ((setting*)defaultSetting)->frequency = metronomeSetting.frequency;
     printf("End user input thread\n");
     pthread_mutex_lock(&mutex);
     numThreadsAlive--;
@@ -497,6 +512,11 @@ bool IsMetronomeFrequencyValid(int modeNum, int frequency) {
     return false;
 }
 
-void SaveMetronomeSetting(char* filePath, setting metronomeSetting) {
-
+bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting) {
+    FILE* stream;
+    bool success;
+    stream = fopen(filePath, "w");
+    success = fprintf(stream, "MODE=%d\nFREQUENCY=%d\n", metronomeSetting->modeNum, metronomeSetting->frequency) > 0;
+    fclose(stream);
+    return success;
 }
