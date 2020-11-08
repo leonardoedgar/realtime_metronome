@@ -12,12 +12,7 @@
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 bool terminateProgram = false;
 int numThreadsAlive = 0;
-int count = 0;
 timer_t timerid;
-char *tempo[] = {"", "Larghissimo", "Grave", "Lento", "Larghetto", "Adagio", "Andante", "Allegro", "Vivace", "Presto", "Prestissimo"};
-int BPM[] = {0, 12, 35, 53, 64, 72, 93, 133, 167, 189, 351};
-int minBPM[] = {0, 1, 25, 46, 61, 67, 77, 109, 157, 177, 201};
-int maxBPM[] = {0, 24, 45, 60, 66, 76, 108, 156, 176, 200, 500};
 
 int main(int argc, char* argv[]) {
     pthread_t tid[2];
@@ -57,14 +52,22 @@ int main(int argc, char* argv[]) {
 }
 
 void PrintTempo() {
-    int i;
+    int modeNum, bpm;
+    char* tempo = "";
+    freqLimit freqRange;
     printf("                            LIST OF TEMPO\n");
     printf("===================================================================\n");
     printf("\tMode  \t\tTempo\t\tBPM\t\tRange\n");
     printf("===================================================================\n");
-    for (i = 1; i <= 10; i++) {
-        printf("\t%2d\t%14s\t\t%3d\t     %3d ~ %3d\n", i, tempo[i], BPM[i], minBPM[i], maxBPM[i]);
+    for (modeNum = 1; modeNum <= 10; modeNum++) {
+        freqRange = GetFreqLimit(modeNum);
+        bpm = GetBPM(modeNum);
+        GetTempo(modeNum, &tempo);
+        if (bpm != -1 && strcmp(tempo, "") != 0) {
+            printf("\t%2d\t%14s\t\t%3d\t     %3d ~ %3d\n", modeNum, tempo, bpm, freqRange.min, freqRange.max);
+        }
     }
+    free(tempo);
 }
 
 void GetFrequency(setting* metronomeSetting) {
@@ -86,7 +89,7 @@ void GetFrequency(setting* metronomeSetting) {
         exitLoop = terminateProgram;
         pthread_mutex_unlock(&mutex);
     } while (metronomeSetting->modeNum == 0 && !exitLoop);
-    metronomeSetting->frequency = BPM[metronomeSetting->modeNum];
+    metronomeSetting->frequency = GetBPM(metronomeSetting->modeNum);
 }
 
 int ReadArrow() {
@@ -111,6 +114,8 @@ int ReadArrow() {
 
 freqLimit GetFreqLimit(int modeNum) {
     freqLimit frequencyRange;
+    int minBPM[] = {0, 1, 25, 46, 61, 67, 77, 109, 157, 177, 201};
+    int maxBPM[] = {0, 24, 45, 60, 66, 76, 108, 156, 176, 200, 500};
     frequencyRange.min = minBPM[modeNum];
     frequencyRange.max = maxBPM[modeNum];
     return frequencyRange;
@@ -174,6 +179,7 @@ int AdjustFreq(setting metronomeSetting) {
 
 void* SpawnUserInputThread(void* defaultSetting) {
     setting metronomeSetting = *((setting*)defaultSetting);
+    char* tempo = "";
     pthread_mutex_lock(&mutex);
     numThreadsAlive++;
     pthread_mutex_unlock(&mutex);
@@ -186,11 +192,13 @@ void* SpawnUserInputThread(void* defaultSetting) {
         printf(KRED "\n[ERROR] Fail to set timer!\n" KNRM);
         TerminateProgram();
     }
-    printf("Your tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM, tempo[metronomeSetting.modeNum],
-            metronomeSetting.frequency);
+    GetTempo(metronomeSetting.modeNum, &tempo);
+    printf("Your tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM,
+            tempo, metronomeSetting.frequency);
     metronomeSetting.frequency = AdjustFreq(metronomeSetting);
     ((setting*)defaultSetting)->frequency = metronomeSetting.frequency;
     printf("End user input thread\n");
+    free(tempo);
     pthread_mutex_lock(&mutex);
     numThreadsAlive--;
     pthread_mutex_unlock(&mutex);
@@ -229,6 +237,7 @@ void CtrlCHandler(int sigNum) {
 
 void PrintAudio(int sigNum) {
     int i;
+    static int count = 0;
     if (count >= 4) {
         printf("\rAudio: ");
         for (i = 0; i < TERMINAL_WIDTH; i++) {
@@ -263,11 +272,13 @@ int UpdateTimer(int frequency) {
 
 void PrintAdjustFreqInstructions(int mode, int frequency, const char* warningMessage) {
     int i;
+    char* tempo = "";
     printf("\033[3A\r");
     for (i = 0; i < TERMINAL_WIDTH; i++) {
         printf(" ");
     }
-    printf("\rYour tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM, tempo[mode], frequency);
+    GetTempo(mode, &tempo);
+    printf("\rYour tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM, tempo, frequency);
     printf("Please use arrow up and down key to adjust the frequency you want.\n");
     if (warningMessage != NULL) {
         printf(KYEL "[WARN] %s\n" KNRM, warningMessage);
@@ -289,6 +300,7 @@ void PrintAdjustFreqInstructions(int mode, int frequency, const char* warningMes
         }
         printf("\rAudio: ");
     }
+    free(tempo);
 }
 
 void TerminateProgram() {
@@ -361,16 +373,19 @@ bool IsMetronomeModeNumValid(int modeNum) {
 
 bool IsMetronomeFrequencyValid(int modeNum, int frequency) {
     freqLimit frequencyRange;
+    char* tempo = "";
     if (IsMetronomeModeNumValid(modeNum)) {
         frequencyRange = GetFreqLimit(modeNum);
         if (frequency <= frequencyRange.max && frequency >= frequencyRange.min) {
             return true;
         }
         else {
+            GetTempo(modeNum, &tempo);
             printf(KRED "[ERROR] Setting with tempo: %s, with frequency: %d is not within the valid range (%d-%d).\n" KNRM,
-                   tempo[modeNum], frequency, frequencyRange.min, frequencyRange.max);
+                   tempo, frequency, frequencyRange.min, frequencyRange.max);
         }
     }
+    free(tempo);
     return false;
 }
 
@@ -381,4 +396,24 @@ bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting) {
     success = fprintf(stream, "MODE=%d\nFREQUENCY=%d\n", metronomeSetting->modeNum, metronomeSetting->frequency) > 0;
     fclose(stream);
     return success;
+}
+
+int GetBPM(int modeNum) {
+    int BPM[] = {0, 12, 35, 53, 64, 72, 93, 133, 167, 189, 351};
+    if(IsMetronomeModeNumValid(modeNum)) {
+        return BPM[modeNum];
+    }
+    return -1;
+}
+
+void GetTempo(int modeNum, char** tempo) {
+    char* tempoArr[] = {"", "Larghissimo", "Grave", "Lento", "Larghetto", "Adagio", "Andante", "Allegro", "Vivace",
+                        "Presto", "Prestissimo"};
+    if(IsMetronomeModeNumValid(modeNum)) {
+        *tempo = malloc(strlen(tempoArr[modeNum]) + 1);
+        strcpy(*tempo, tempoArr[modeNum]);
+    }
+    else {
+        strcpy(*tempo, "");
+    }
 }
