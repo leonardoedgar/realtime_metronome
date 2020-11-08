@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <math.h>
+#include <string.h>
 
 /*
  * Macros definitions
@@ -22,7 +23,7 @@
 #define QNX_TERMINAL_WIDTH 100
 #define UBUNTU_ID 2
 #define UBUNTU_TERMINAL_WIDTH 195
-#define PLATFORM_ID UBUNTU_ID
+#define PLATFORM_ID QNX_ID
 
 #if PLATFORM_ID == QNX_ID
 #define TERMINAL_WIDTH QNX_TERMINAL_WIDTH
@@ -34,7 +35,6 @@
  * A data type that contains the metronome setting.
  */
 typedef struct {
-    char modetemp[1024];
     int modeNum;
     int frequency;
 } setting;
@@ -47,18 +47,18 @@ typedef struct {
     int max;
 } freqLimit;
 
-int readArrow();
-freqLimit getFreqLimit();
-setting getfrequency(setting userSetting);
-int adjustFreq(setting userSetting);
-void printTempo();
+int ReadArrow();
+freqLimit GetFreqLimit();
+setting GetFrequency(setting metronomeSetting);
+int AdjustFreq(setting metronomeSetting);
+void PrintTempo();
 
 /**
  * A function to spawn the user input thread.
  * @param arg contains the argument to be passed to the thread
  * @return NULL
  */
-void* SpawnUserInputThread(void* arg);
+void* SpawnUserInputThread(void* defaultSetting);
 
 /**
  * A function to spawn the audio thread.
@@ -99,39 +99,95 @@ void PrintAdjustFreqInstructions(int mode, int frequency, const char* warningMes
  */
 void TerminateProgram();
 
+/**
+ * A function to parse the command-line arguments.
+ * @param argc represents the number of arguments
+ * @param argv represents contains an array of arguments
+ * @param filePath represents the file path passed as a argument
+ */
+void ParseArgs(int argc, char** argv, char** filePath);
+
+/**
+ * A function to parse the config file.
+ * @param filePath indicates the path to the config file
+ * @param metronomeSetting indicates the metronome setting written in the file
+ */
+void ParseConfigFile(char* filePath, setting* metronomeSetting);
+
+/**
+ * A function to check if a metronome mode number is valid.
+ * @param modeNum indicates the mode number
+ * @return true if valid, otherwise false
+ */
+bool IsMetronomeModeNumValid(int modeNum);
+
+/**
+ * A function to check if a metronome frequency valid within its mode.
+ * @param modeNum indicates the mode number
+ * @param frequency indicates the frequency
+ * @return true if valid, otherwise false
+ */
+bool IsMetronomeFrequencyValid(int modeNum, int frequency);
+
+/**
+ * A function to save the metronome setting to a file.
+ * @param filePath indicates the path to the file to save the settting to
+ * @param metronomeSetting indicates the metronome setting to be saved
+ * @return true for a successful saving, otherwise false
+ */
+bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting);
+
+
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_t tid[2];
 bool terminateProgram = false;
 int numThreadsAlive=0;
 int count = 0;
 timer_t timerid;
-setting userSetting;
 char *tempo[] = {"", "Larghissimo", "Grave", "Lento", "Larghetto", "Adagio", "Andante", "Allegro", "Vivace", "Presto", "Prestissimo"};
 int BPM[] = {0, 12, 35, 53, 64, 72, 93, 133, 167, 189, 351};
-int minBPM[] = {0, 0, 25, 46, 61, 67, 77, 109, 157, 177, 201};
+int minBPM[] = {0, 1, 25, 46, 61, 67, 77, 109, 157, 177, 201};
 int maxBPM[] = {0, 24, 45, 60, 66, 76, 108, 156, 176, 200, 500};
 
-int main(void)
-{
-    bool exitLoop;
-    signal(SIGINT, CtrlCHandler);
-    pthread_create(&(tid[0]), NULL, SpawnAudioThread, NULL);
-    pthread_create(&(tid[1]), NULL, SpawnUserInputThread, NULL);
-    sleep(1);
-    pthread_mutex_lock(&mutex);
-    exitLoop = numThreadsAlive == 0;
-    pthread_mutex_unlock(&mutex);
-    while(!exitLoop) {
-        pthread_mutex_lock(&mutex);
-        exitLoop = numThreadsAlive == 0;
-        pthread_mutex_unlock(&mutex);
+int main(int argc, char* argv[]) {
+    setting metronomeSetting;
+    char *configFilePath = NULL;
+    bool exitProgram;
+    metronomeSetting.modeNum=0;
+    metronomeSetting.frequency=0;
+    ParseArgs(argc, argv, &configFilePath);
+    if (configFilePath != NULL) {
+        ParseConfigFile(configFilePath, &metronomeSetting);
     }
+    signal(SIGINT, CtrlCHandler);
+    pthread_mutex_lock(&mutex);
+    exitProgram = terminateProgram;
+    pthread_mutex_unlock(&mutex);
+    if (!exitProgram) {
+        pthread_create(&(tid[0]), NULL, SpawnAudioThread, NULL);
+        pthread_create(&(tid[1]), NULL, SpawnUserInputThread, (void *)&metronomeSetting);
+        sleep(1);
+        pthread_mutex_lock(&mutex);
+        exitProgram = numThreadsAlive == 0;
+        pthread_mutex_unlock(&mutex);
+        while(!exitProgram) {
+            pthread_mutex_lock(&mutex);
+            exitProgram = numThreadsAlive == 0;
+            pthread_mutex_unlock(&mutex);
+        }
+        if(configFilePath != NULL) {
+            if(!SaveMetronomeSetting(configFilePath, &metronomeSetting)) {
+                printf("Failed to save the latest metronome setting into the file: %s\n", configFilePath);
+            }
+        }
+    }
+    free(configFilePath);
     return 0;
 }
 
-void printTempo() {
+void PrintTempo() {
     int i;
-    printf("                         LIST OF TEMPO\n");
+    printf("                            LIST OF TEMPO\n");
     printf("===================================================================\n");
     printf("\tMode  \t\tTempo\t\tBPM\t\tRange\n");
     printf("===================================================================\n");
@@ -140,42 +196,38 @@ void printTempo() {
     }
 }
 
-setting getfrequency(setting userSetting) {
-	bool exitLoop = userSetting.modeNum != 0;
-	printTempo();
+setting GetFrequency(setting metronomeSetting) {
+    bool exitLoop = metronomeSetting.modeNum != 0;
+    char modeStr[1024];
     do {
-        printf("Please choose tempo mode: ");
-        if (!fgets(userSetting.modetemp, 1024, stdin)) {
-            printf("data: %s\n", userSetting.modetemp);
+        printf("Choose tempo mode: ");
+        if (!fgets(modeStr, 1024, stdin)) {
+            printf("data: %s\n", modeStr);
         }
-        else if (fabs(atoi(userSetting.modetemp) - atof(userSetting.modetemp)) > NEARLY_ZERO) {
+        else if (fabs(atoi(modeStr) - atof(modeStr)) > NEARLY_ZERO) {
             printf("Input is a floating point number.\n");
         }
-        else if (atoi(userSetting.modetemp) > 10 || atoi(userSetting.modetemp) < 1) {
-            printf("Setting is not within the valid range (1-10).\n");
-        }
+        else if (!IsMetronomeModeNumValid(atoi(modeStr))) {}
         else {
-            userSetting.modeNum = atoi(userSetting.modetemp);
+            metronomeSetting.modeNum = atoi(modeStr);
         }
         pthread_mutex_lock( &mutex );
         exitLoop = terminateProgram;
         pthread_mutex_unlock( &mutex );
-    } while (userSetting.modeNum == 0 && !exitLoop);
-    printf("Your mode: %d, Corresponding BPM: %d\n", userSetting.modeNum, userSetting.frequency = BPM[userSetting.modeNum]);
-    return userSetting;
+    } while (metronomeSetting.modeNum == 0 && !exitLoop);
+    metronomeSetting.frequency = BPM[metronomeSetting.modeNum];
+    return metronomeSetting;
 }
 
-int readArrow()
-{
+int ReadArrow() {
     // Read the up and down arrow key to adjust frequency
     int int_1 = 0;
-    int int_2 = 0;
     int int_3 = 0;
     system("/bin/stty raw");
     scanf("%d", &int_3);
     int_1 = getchar();
     if (int_1 == 27) {
-        int_2 = getchar();
+        getchar();
         int_3 = getchar();
         printf("\r          ");
     }
@@ -188,94 +240,51 @@ int readArrow()
     return int_3;
 }
 
-freqLimit getFreqLimit(int modeNum)
-{
+freqLimit GetFreqLimit(int modeNum) {
     freqLimit frequencyRange;
-    switch (modeNum) {
-    case 1:
-        frequencyRange.min = 0;
-        frequencyRange.max = 24;
-        break;
-    case 2:
-        frequencyRange.min = 25;
-        frequencyRange.max = 45;
-        break;
-    case 3:
-        frequencyRange.min = 46;
-        frequencyRange.max = 60;
-        break;
-    case 4:
-        frequencyRange.min = 61;
-        frequencyRange.max = 66;
-        break;
-    case 5:
-        frequencyRange.min = 67;
-        frequencyRange.max = 76;
-        break;
-    case 6:
-        frequencyRange.min = 77;
-        frequencyRange.max = 108;
-        break;
-    case 7:
-        frequencyRange.min = 109;
-        frequencyRange.max = 156;
-        break;
-    case 8:
-        frequencyRange.min = 157;
-        frequencyRange.max = 176;
-        break;
-    case 9:
-        frequencyRange.min = 177;
-        frequencyRange.max = 200;
-        break;
-    case 10:
-        frequencyRange.min = 201;
-        frequencyRange.max = 500;
-        break;
-    }
+    frequencyRange.min = minBPM[modeNum];
+    frequencyRange.max = maxBPM[modeNum];
     return frequencyRange;
 }
 
-int adjustFreq(setting userSetting)
-{
-    int input, i;
+int AdjustFreq(setting metronomeSetting) {
+    int input;
     freqLimit frequencyRange;
     bool exitLoop;
     pthread_mutex_lock(&mutex);
     exitLoop = terminateProgram;
     pthread_mutex_unlock(&mutex);
-    frequencyRange = getFreqLimit(userSetting.modeNum);
+    frequencyRange = GetFreqLimit(metronomeSetting.modeNum);
     printf("Please use arrow up and down key to adjust the frequency you want.\n\n");
     printf("Audio: ");
     while (!exitLoop) {
-        input = readArrow();
-        switch (input)
-        {
+        input = ReadArrow();
+        switch (input) {
         case 65:
-            if (userSetting.frequency < frequencyRange.max) {
-                userSetting.frequency++;
-                PrintAdjustFreqInstructions(userSetting.modeNum, userSetting.frequency, NULL);
-                if(UpdateTimer(userSetting.frequency) == -1 ) {
+            if (metronomeSetting.frequency < frequencyRange.max) {
+                metronomeSetting.frequency++;
+                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
+                if(UpdateTimer(metronomeSetting.frequency) == -1 ) {
                     printf("\nError setting timer!\n");
                     TerminateProgram();
                 }
             }
             else {
-                PrintAdjustFreqInstructions(userSetting.modeNum, userSetting.frequency,
+                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
                         "Maximum limit reached, unable to increase further.");
             }
             break;
         case 66:
-            if (frequencyRange.min < userSetting.frequency) {
-                userSetting.frequency--;
-                PrintAdjustFreqInstructions(userSetting.modeNum, userSetting.frequency, NULL);
-                if(UpdateTimer(userSetting.frequency) == -1) {
+            if (frequencyRange.min < metronomeSetting.frequency) {
+                metronomeSetting.frequency--;
+                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
+                if(UpdateTimer(metronomeSetting.frequency) == -1) {
                     printf("\nError setting timer!\n");
                     TerminateProgram();
                 }
             }
             else {
-                PrintAdjustFreqInstructions(userSetting.modeNum, userSetting.frequency,
+                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
                         "Minimum limit reached, unable to decrease further.");
             }
             break;
@@ -297,20 +306,26 @@ int adjustFreq(setting userSetting)
         exitLoop = terminateProgram;
         pthread_mutex_unlock(&mutex);
     }
-    return userSetting.frequency;
+    return metronomeSetting.frequency;
 }
 
-void* SpawnUserInputThread(void* arg) {
+void* SpawnUserInputThread(void* defaultSetting) {
+    setting metronomeSetting = *((setting*)defaultSetting);
     pthread_mutex_lock(&mutex);
     numThreadsAlive++;
     pthread_mutex_unlock(&mutex);
     printf("Start user input thread\n");
-    userSetting = getfrequency(userSetting);
-    if(UpdateTimer(userSetting.frequency) == -1) {
+    PrintTempo();
+    if(metronomeSetting.modeNum == 0 || metronomeSetting.frequency == 0) {
+        metronomeSetting = GetFrequency(metronomeSetting);
+    }
+    if(UpdateTimer(metronomeSetting.frequency) == -1) {
         printf( "\nError setting timer!\n" );
         TerminateProgram();
     }
-    userSetting.frequency = adjustFreq(userSetting);
+    printf("Your tempo: %s, corresponding BPM: %d\n", tempo[metronomeSetting.modeNum], metronomeSetting.frequency);
+    metronomeSetting.frequency = AdjustFreq(metronomeSetting);
+    ((setting*)defaultSetting)->frequency = metronomeSetting.frequency;
     printf("End user input thread\n");
     pthread_mutex_lock(&mutex);
     numThreadsAlive--;
@@ -386,7 +401,11 @@ int UpdateTimer(int frequency) {
 void PrintAdjustFreqInstructions(int mode, int frequency, const char* warningMessage) {
     int i;
     printf("\033[3A");
-    printf("\rYour mode: %d, Corresponding BPM: %d\n", mode, frequency);
+    printf("\r");
+    for(i=0; i<TERMINAL_WIDTH; i++) {
+        printf(" ");
+    }
+    printf("\rYour tempo: %s, corresponding BPM: %d\n", tempo[mode], frequency);
     printf("Please use arrow up and down key to adjust the frequency you want.\n");
     if (warningMessage != NULL) {
         printf(KYEL "[WARN]   %s\n", warningMessage);
@@ -412,4 +431,91 @@ void TerminateProgram() {
     pthread_mutex_lock(&mutex);
     terminateProgram = true;
     pthread_mutex_unlock(&mutex);
+}
+
+void ParseArgs(int argc, char** argv, char** filePath) {
+    int i;
+    if (argc > 1) {
+        for (i=1; i<argc; i++) {
+            if (strcmp(*(argv+i), "--config") == 0) {
+                *filePath = malloc(strlen(*(argv+i+1)) + 1);
+                strcpy(*filePath, *(argv+i+1));
+                break;
+            }
+        }
+    }
+}
+
+void ParseConfigFile(char* filePath, setting* metronomeSetting) {
+    FILE *stream;
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+    bool isModeConfigFound = false, isFrequencyConfigFound = false;
+    stream = fopen(filePath, "r");
+    if (stream == NULL) {
+        printf("Err: file with path %s not found. \n", filePath);
+
+    }
+    else {
+        while ((read = getline(&line, &len, stream)) != -1) {
+            if (strstr(line, "MODE")) {
+                line = strstr(line, "=");
+                metronomeSetting->modeNum = atoi(&line[1]);
+                isModeConfigFound = true;
+            }
+            else if (strstr(line, "FREQUENCY")) {
+                line = strstr(line, "=");
+                metronomeSetting->frequency = atoi(&line[1]);
+                isFrequencyConfigFound = true;
+            }
+        }
+        fclose(stream);
+    }
+    if (!isModeConfigFound || !isFrequencyConfigFound) {
+        printf("Configuration file format error.\n");
+        TerminateProgram();
+    }
+    else if (!IsMetronomeModeNumValid(metronomeSetting->modeNum)) {
+        TerminateProgram();
+    }
+    else {
+        if (!IsMetronomeFrequencyValid(metronomeSetting->modeNum, metronomeSetting->frequency)) {
+            TerminateProgram();
+        }
+    }
+}
+
+bool IsMetronomeModeNumValid(int modeNum) {
+    if (modeNum <=10 && modeNum >= 1) {
+        return true;
+    }
+    else {
+        printf("Setting with mode: %d is not within the valid range (1-10).\n", modeNum);
+        return false;
+    }
+}
+
+bool IsMetronomeFrequencyValid(int modeNum, int frequency) {
+    freqLimit frequencyRange;
+    if (IsMetronomeModeNumValid(modeNum)) {
+        frequencyRange = GetFreqLimit(modeNum);
+        if (frequency <= frequencyRange.max && frequency >= frequencyRange.min) {
+            return true;
+        }
+        else {
+            printf("Setting with tempo: %s, with frequency: %d is not within the valid range (%d-%d).\n",
+                   tempo[modeNum], frequency, frequencyRange.min, frequencyRange.max);
+        }
+    }
+    return false;
+}
+
+bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting) {
+    FILE* stream;
+    bool success;
+    stream = fopen(filePath, "w");
+    success = fprintf(stream, "MODE=%d\nFREQUENCY=%d\n", metronomeSetting->modeNum, metronomeSetting->frequency) > 0;
+    fclose(stream);
+    return success;
 }
