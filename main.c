@@ -7,15 +7,17 @@
 #include <signal.h>
 #include <math.h>
 #include <string.h>
+#include <errno.h>
 #include "main.h"
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 bool terminateProgram = false;
-int numThreadsAlive = 0;
 timer_t timerid;
 
 int main(int argc, char* argv[]) {
+    struct sigaction ctrlCAction;
     pthread_t tid[2];
+    sigset_t signalSet;
     setting metronomeSetting;
     char* configFilePath = NULL;
     bool exitProgram;
@@ -25,29 +27,33 @@ int main(int argc, char* argv[]) {
     if (configFilePath != NULL) {
         ParseConfigFile(configFilePath, &metronomeSetting);
     }
-    signal(SIGINT, CtrlCHandler);
+    memset(&ctrlCAction, 0, sizeof(struct sigaction));
+    ctrlCAction.sa_handler = CtrlCHandler;
+    ctrlCAction.sa_flags = 0;
+    sigaction(SIGINT, &ctrlCAction, NULL);
+    sigemptyset(&signalSet);
+    sigaddset(&signalSet, SIGINT);
+    if (pthread_sigmask(SIG_BLOCK, &signalSet, NULL) == -1) {
+        printf(KRED "[ERROR] Failed to set signal masks.\n" KNRM);
+        TerminateProgram();
+    }
     pthread_mutex_lock(&mutex);
     exitProgram = terminateProgram;
     pthread_mutex_unlock(&mutex);
     if (!exitProgram) {
         pthread_create(&(tid[0]), NULL, SpawnAudioThread, NULL);
         pthread_create(&(tid[1]), NULL, SpawnUserInputThread, (void *)&metronomeSetting);
-        sleep(1);
-        pthread_mutex_lock(&mutex);
-        exitProgram = numThreadsAlive == 0;
-        pthread_mutex_unlock(&mutex);
-        while (!exitProgram) {
-            pthread_mutex_lock(&mutex);
-            exitProgram = numThreadsAlive == 0;
-            pthread_mutex_unlock(&mutex);
-        }
+        pthread_join(tid[0], NULL);
+        pthread_join(tid[1], NULL);
         if (configFilePath != NULL) {
             if (!SaveMetronomeSetting(configFilePath, &metronomeSetting)) {
                 printf(KRED "[ERROR] Failed to save the latest metronome setting into the file: %s\n" KNRM, configFilePath);
             }
         }
     }
-    free(configFilePath);
+    if(configFilePath != NULL) {
+        free(configFilePath);
+    }
     return 0;
 }
 
@@ -72,24 +78,48 @@ void PrintTempo() {
 
 void GetFrequency(setting* metronomeSetting) {
     bool exitLoop = metronomeSetting->modeNum != 0;
-    char modeStr[1024];
+    bool exitInputLoop = false;
+    char modeStr[1024], ch;
     do {
         printf("Choose tempo mode: ");
-        if (!fgets(modeStr, 1024, stdin)) {
-            printf("data: %s\n", modeStr);
-        }
-        else if (fabs(atoi(modeStr) - atof(modeStr)) > NEARLY_ZERO) {
-            printf("Input is a floating point number.\n");
-        }
-        else if (!IsMetronomeModeNumValid(atoi(modeStr))) {}
-        else {
-            metronomeSetting->modeNum = atoi(modeStr);
+        strcpy(modeStr, "");
+        fflush(stdout);
+        while (!exitInputLoop) {
+            ch = getchar();
+            pthread_mutex_lock(&mutex);
+            exitInputLoop = terminateProgram;
+            pthread_mutex_unlock(&mutex);
+            if (exitInputLoop) {}
+            else if (ch == '\n') {
+                exitInputLoop = true;
+            }
+            else {
+                strncat(modeStr, &ch, 1);
+            }
         }
         pthread_mutex_lock(&mutex);
         exitLoop = terminateProgram;
         pthread_mutex_unlock(&mutex);
+        if (!exitLoop) {
+            if (strcmp(modeStr, "") == 0) {
+                printf(KYEL "[WARN] Input is empty.\n" KNRM);
+                exitInputLoop = false;
+            }
+            else if (fabs(atoi(modeStr) - atof(modeStr)) > NEARLY_ZERO) {
+                printf(KYEL "[WARN] Input is a floating point number.\n" KNRM);
+                exitInputLoop = false;
+            }
+            else if (!IsMetronomeModeNumValid(atoi(modeStr))) {
+                exitInputLoop = false;
+            }
+            else {
+                metronomeSetting->modeNum = atoi(modeStr);
+            }
+        }
     } while (metronomeSetting->modeNum == 0 && !exitLoop);
-    metronomeSetting->frequency = GetBPM(metronomeSetting->modeNum);
+    if (metronomeSetting->modeNum != 0) {
+        metronomeSetting->frequency = GetBPM(metronomeSetting->modeNum);
+    }
 }
 
 int ReadArrow() {
@@ -179,37 +209,48 @@ int AdjustFreq(setting metronomeSetting) {
 
 void* SpawnUserInputThread(void* defaultSetting) {
     setting metronomeSetting = *((setting*)defaultSetting);
+    sigset_t signalSet;
     char* tempo = "";
-    pthread_mutex_lock(&mutex);
-    numThreadsAlive++;
-    pthread_mutex_unlock(&mutex);
+    bool terminateThread;
     printf("Start user input thread\n");
-    PrintTempo();
-    if (metronomeSetting.modeNum == 0 || metronomeSetting.frequency == 0) {
-        GetFrequency(&metronomeSetting);
-    }
-    if (UpdateTimer(metronomeSetting.frequency) == -1) {
-        printf(KRED "\n[ERROR] Fail to set timer!\n" KNRM);
+    sigemptyset(&signalSet);
+    sigaddset(&signalSet, SIGINT);
+    if (pthread_sigmask(SIG_UNBLOCK, &signalSet, NULL) == -1) {
+        printf(KRED "[ERROR] Failed to set signal masks.\n" KNRM);
         TerminateProgram();
     }
-    GetTempo(metronomeSetting.modeNum, &tempo);
-    printf("Your tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM,
-            tempo, metronomeSetting.frequency);
-    metronomeSetting.frequency = AdjustFreq(metronomeSetting);
-    ((setting*)defaultSetting)->frequency = metronomeSetting.frequency;
-    printf("End user input thread\n");
-    free(tempo);
     pthread_mutex_lock(&mutex);
-    numThreadsAlive--;
+    terminateThread = terminateProgram;
     pthread_mutex_unlock(&mutex);
+    if (!terminateThread) {
+        PrintTempo();
+        if (metronomeSetting.modeNum == 0 || metronomeSetting.frequency == 0) {
+            GetFrequency(&metronomeSetting);
+        }
+        pthread_mutex_lock(&mutex);
+        terminateThread = terminateProgram;
+        pthread_mutex_unlock(&mutex);
+        if (!terminateThread) {
+            if (UpdateTimer(metronomeSetting.frequency) == -1) {
+                printf(KRED "\n[ERROR] Fail to set timer!\n" KNRM);
+                TerminateProgram();
+            }
+            GetTempo(metronomeSetting.modeNum, &tempo);
+            printf("Your tempo: " KGRN "%s" KNRM ", corresponding BPM: " KGRN "%d\n" KNRM,
+                   tempo, metronomeSetting.frequency);
+            metronomeSetting.frequency = AdjustFreq(metronomeSetting);
+            ((setting*)defaultSetting)->frequency = metronomeSetting.frequency;
+            free(tempo);
+        }
+    }
+    printf("End user input thread\n");
     pthread_exit(NULL);
 }
 
 void* SpawnAudioThread(void* arg) {
-    bool exitLoop;
+    bool terminateThread;
     pthread_mutex_lock(&mutex);
-    numThreadsAlive++;
-    exitLoop = terminateProgram;
+    terminateThread = terminateProgram;
     pthread_mutex_unlock(&mutex);
     printf("Start audio thread\n");
     signal(SIGALRM, PrintAudio);
@@ -217,21 +258,17 @@ void* SpawnAudioThread(void* arg) {
         printf(KRED "[ERROR] Failed to create timer\n" KNRM);
         TerminateProgram();
     }
-    while (!exitLoop) {
+    while (!terminateThread) {
         pthread_mutex_lock(&mutex);
-        exitLoop = terminateProgram;
+        terminateThread = terminateProgram;
         pthread_mutex_unlock(&mutex);
     }
     printf("End audio thread\n");
     timer_delete(timerid);
-    pthread_mutex_lock(&mutex);
-    numThreadsAlive--;
-    pthread_mutex_unlock(&mutex);
     pthread_exit(NULL);
 }
 
 void CtrlCHandler(int sigNum) {
-    printf("Ctrl-C raised.\n");
     TerminateProgram();
 }
 
@@ -331,6 +368,7 @@ void ParseConfigFile(char* filePath, setting* metronomeSetting) {
     stream = fopen(filePath, "r");
     if (stream == NULL) {
         printf(KRED "[ERROR] File with path %s not found. \n" KNRM, filePath);
+        TerminateProgram();
     }
     else {
         while ((read = getline(&line, &len, stream)) != -1) {
@@ -346,17 +384,17 @@ void ParseConfigFile(char* filePath, setting* metronomeSetting) {
             }
         }
         fclose(stream);
-    }
-    if (!isModeConfigFound || !isFrequencyConfigFound) {
-        printf(KRED "[ERROR] Configuration file format error.\n" KNRM);
-        TerminateProgram();
-    }
-    else if (!IsMetronomeModeNumValid(metronomeSetting->modeNum)) {
-        TerminateProgram();
-    }
-    else {
-        if (!IsMetronomeFrequencyValid(metronomeSetting->modeNum, metronomeSetting->frequency)) {
+        if (!isModeConfigFound || !isFrequencyConfigFound) {
+            printf(KRED "[ERROR] Configuration file format error.\n" KNRM);
             TerminateProgram();
+        }
+        else if (!IsMetronomeModeNumValid(metronomeSetting->modeNum)) {
+            TerminateProgram();
+        }
+        else {
+            if (!IsMetronomeFrequencyValid(metronomeSetting->modeNum, metronomeSetting->frequency)) {
+                TerminateProgram();
+            }
         }
     }
 }
