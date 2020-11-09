@@ -151,3 +151,17 @@ bool IsMetronomeFrequencyValid(int modeNum, int frequency);
  * @return true for a successful saving, otherwise false
  */
 bool SaveMetronomeSetting(char* filePath, setting* metronomeSetting);
+
+/**
+ * A function to get the default beats per minute based on the mode of the metronome.
+ * @param modeNum indicates the mode number
+ * @return the beats per minute
+ */
+int GetBPM(int modeNum);
+
+/**
+ * A function to get the tempo of the metronome.
+ * @param modeNum indicates the mode number of the metronome
+ * @param tempo indicates the tempo of the metronome
+ */
+void GetTempo(int modeNum, char** tempo);
