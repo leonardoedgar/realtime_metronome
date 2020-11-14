@@ -351,8 +351,36 @@ void ParseArgs(int argc, char** argv, char** filePath) {
     if (argc > 1) {
         for (i = 1; i < argc; i++) {
             if (strcmp(*(argv + i), "--config") == 0) {
-                *filePath = malloc(strlen(*(argv + i + 1)) + 1);
-                strcpy(*filePath, *(argv + i + 1));
+                if(argc == 2 || argc > 3) {
+                    printf("usage: ./main [-h] [--config CONFIG_FILE_PATH] \n"
+                           "main: error: argument %s: expected one argument\n", *(argv + i));
+                    TerminateProgram();
+                }
+                else if (argc == 3) {
+                    *filePath = malloc(strlen(*(argv + i + 1)) + 1);
+                    strcpy(*filePath, *(argv + i + 1));
+                }
+                break;
+            }
+            else if ((strcmp(*(argv + i), "-h") == 0 || strcmp(*(argv + i), "--help") == 0)) {
+                printf("usage: ./main [-h] [--config CONFIG_FILE_PATH] \n");
+                if (argc > 2) {
+                    printf("main: error: argument %s: expected no argument\n", *(argv + i));
+                }
+                else {
+                    printf("\n"
+                           "To start the real-time metronome.\n\n"
+                           "optional arguments:\n"
+                           " -h, --help                 show this help message and exit\n"
+                           " --config CONFIG_FILE_PATH  to load the metronome setting from a configuration file\n");
+                }
+                TerminateProgram();
+                break;
+            }
+            else {
+                printf("usage: ./main [-h] [--config CONFIG_FILE_PATH]\n"
+                       "main: error: unrecognized arguments: %s\n", *(argv + i));
+                TerminateProgram();
                 break;
             }
         }
@@ -361,9 +389,8 @@ void ParseArgs(int argc, char** argv, char** filePath) {
 
 void ParseConfigFile(char* filePath, setting* metronomeSetting) {
     FILE* stream;
-    char* line = NULL;
-    size_t len = 0;
-    ssize_t read;
+    char line[1024];
+    char* parsedLine;
     bool isModeConfigFound = false, isFrequencyConfigFound = false;
     stream = fopen(filePath, "r");
     if (stream == NULL) {
@@ -371,15 +398,15 @@ void ParseConfigFile(char* filePath, setting* metronomeSetting) {
         TerminateProgram();
     }
     else {
-        while ((read = getline(&line, &len, stream)) != -1) {
+        while ((fgets(line, 1024, stream)) != NULL) {
             if (strstr(line, "MODE")) {
-                line = strstr(line, "=");
-                metronomeSetting->modeNum = atoi(&line[1]);
+                parsedLine = strstr(line, "=");
+                metronomeSetting->modeNum = atoi(&parsedLine[1]);
                 isModeConfigFound = true;
             }
             else if (strstr(line, "FREQUENCY")) {
-                line = strstr(line, "=");
-                metronomeSetting->frequency = atoi(&line[1]);
+                parsedLine = strstr(line, "=");
+                metronomeSetting->frequency = atoi(&parsedLine[1]);
                 isFrequencyConfigFound = true;
             }
         }
