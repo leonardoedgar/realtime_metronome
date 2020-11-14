@@ -133,7 +133,10 @@ int ReadArrow() {
     system("/bin/stty raw");
     scanf("%d", &int_3);
     int_1 = getchar();
-    if (int_1 == 27) {
+    if (int_1 == 3 && int_3 == 0) {
+        TerminateProgram();
+    }
+    else if (int_1 == 27) {
         getchar();
         int_3 = getchar();
         printf("\r          ");
@@ -168,46 +171,49 @@ int AdjustFreq(setting metronomeSetting) {
     printf("Audio: ");
     while (!exitLoop) {
         input = ReadArrow();
-        switch (input) {
-        case 65:
-            if (metronomeSetting.frequency < frequencyRange.max) {
-                metronomeSetting.frequency++;
-                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
-                if (UpdateTimer(metronomeSetting.frequency) == -1) {
-                    printf(KRED "\n[ERROR] Fail to set timer!\n" KNRM);
-                    TerminateProgram();
-                }
-            }
-            else {
-                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
-                                            "Maximum limit reached, unable to increase further.");
-            }
-            break;
-        case 66:
-            if (frequencyRange.min < metronomeSetting.frequency) {
-                metronomeSetting.frequency--;
-                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
-                if (UpdateTimer(metronomeSetting.frequency) == -1) {
-                    printf(KRED "\n[Error] Fail to set timer!\n" KNRM);
-                    TerminateProgram();
-                }
-            }
-            else {
-                PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
-                                            "Minimum limit reached, unable to decrease further.");
-            }
-            break;
-        case 'q':
-            TerminateProgram();
-            break;
-        default:
-            TerminateProgram();
-            break;
-        }
-        fflush(stdout);
         pthread_mutex_lock(&mutex);
         exitLoop = terminateProgram;
         pthread_mutex_unlock(&mutex);
+        if (!exitLoop) {
+            switch (input) {
+                case 65:
+                    if (metronomeSetting.frequency < frequencyRange.max) {
+                        metronomeSetting.frequency++;
+                        PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
+                        if (UpdateTimer(metronomeSetting.frequency) == -1) {
+                            printf(KRED "\n[ERROR] Fail to set timer!\n" KNRM);
+                            TerminateProgram();
+                        }
+                    }
+                    else {
+                        PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
+                                                    "Maximum limit reached, unable to increase further.");
+                    }
+                    break;
+                case 66:
+                    if (frequencyRange.min < metronomeSetting.frequency) {
+                        metronomeSetting.frequency--;
+                        PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency, NULL);
+                        if (UpdateTimer(metronomeSetting.frequency) == -1) {
+                            printf(KRED "\n[Error] Fail to set timer!\n" KNRM);
+                            TerminateProgram();
+                        }
+                    }
+                    else {
+                        PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
+                                                    "Minimum limit reached, unable to decrease further.");
+                    }
+                    break;
+                default:
+                    PrintAdjustFreqInstructions(metronomeSetting.modeNum, metronomeSetting.frequency,
+                            "Input in not valid. Only use arrow up or down to adjust the frequency.");
+                    break;
+            }
+            pthread_mutex_lock(&mutex);
+            exitLoop = terminateProgram;
+            pthread_mutex_unlock(&mutex);
+        }
+        fflush(stdout);
     }
     return metronomeSetting.frequency;
 }
