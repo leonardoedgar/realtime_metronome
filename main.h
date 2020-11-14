@@ -165,3 +165,10 @@ int GetBPM(int modeNum);
  * @param tempo indicates the tempo of the metronome
  */
 void GetTempo(int modeNum, char** tempo);
+
+/**
+ * A function to check if a given string is a numerical value
+ * @param str indicates the string to check
+ * @return true if it is a numerical value, otherwise false
+ */
+bool IsNumeric(char* str);
