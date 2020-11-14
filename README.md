@@ -2,7 +2,9 @@
 
 NTU MA4830 Realtime Software **Major** Project AY20/21
 * Generate a precise, uninterrupted, and regular beat
-* Accept changes to beat rates in beats/minute via the keyboard
+* Accept changes to beat rates in beats/minute via the keyboard in **real-time**
+* Load and save metronome's setting into a configuration file
+
 
 ## Table of Contents
 
@@ -20,7 +22,7 @@ Welcome to **Realtime Metronome** project! There are just a few steps to get you
 1. Compute
     * Any computer
 2. Software package
-    * gcc >= 7.5.0
+    * gcc >= 7.5.0 (for Ubuntu 18.04 LTS)
 
 ## 3. Installing
 
@@ -31,16 +33,22 @@ sudo apt-get update && sudo apt-get install -y gcc libc6-dev --no-install-recomm
 ## 4. Run
 
 * To compile the program
-```bash
-gcc -o main main.c -lrt -lpthread
-```
+
+    * On Ubuntu 18.04 LTS
+        ```bash
+        gcc -o main main.c -lrt -lpthread
+        ```
+    * On QNX 6.XX
+        ```bash
+        cc -o main main.c
+        ```
 
 * To run the executable
-```bash
-./main
-```
+    ```bash
+    ./main
+    ```
 
 * To run the executable with loading & saving the metronome's setting into a configuration file
-```bash
-./main --config config.txt
-```
+    ```bash
+    ./main --config config.txt
+    ```
