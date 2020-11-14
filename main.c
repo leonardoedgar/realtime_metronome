@@ -436,7 +436,7 @@ bool IsMetronomeModeNumValid(int modeNum) {
         return true;
     }
     else {
-        printf(KRED "[ERROR] Setting with mode: %d is not within the valid range (1-10).\n" KNRM, modeNum);
+        printf(KYEL "[WARN] Setting with mode: %d is not within the valid range (1-10).\n" KNRM, modeNum);
         return false;
     }
 }
