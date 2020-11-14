@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <math.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include "main.h"
 
@@ -103,6 +104,10 @@ void GetFrequency(setting* metronomeSetting) {
         if (!exitLoop) {
             if (strcmp(modeStr, "") == 0) {
                 printf(KYEL "[WARN] Input is empty.\n" KNRM);
+                exitInputLoop = false;
+            }
+            else if(!IsNumeric(modeStr)) {
+                printf(KYEL "[WARN] Input is not a number.\n" KNRM);
                 exitInputLoop = false;
             }
             else if (fabs(atoi(modeStr) - atof(modeStr)) > NEARLY_ZERO) {
@@ -446,7 +451,7 @@ bool IsMetronomeFrequencyValid(int modeNum, int frequency) {
         }
         else {
             GetTempo(modeNum, &tempo);
-            printf(KRED "[ERROR] Setting with tempo: %s, with frequency: %d is not within the valid range (%d-%d).\n" KNRM,
+            printf(KYEL "[WARN] Setting with tempo: %s, with frequency: %d is not within the valid range (%d-%d).\n" KNRM,
                    tempo, frequency, frequencyRange.min, frequencyRange.max);
         }
     }
@@ -481,4 +486,20 @@ void GetTempo(int modeNum, char** tempo) {
     else {
         strcpy(*tempo, "");
     }
+}
+
+bool IsNumeric(char* str) {
+    int i;
+    int commaCounter = 0;
+    for (i = 0; *(str + i) != '\0'; i++) {
+        if (isalpha(str[i])) {
+            if (str[i] == '.' && commaCounter == 0) {
+                commaCounter += 1;
+            }
+            else {
+                return false;
+            }
+        }
+    }
+    return true;
 }
