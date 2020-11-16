@@ -256,6 +256,7 @@ void* SpawnUserInputThread(void* defaultSetting) {
     }
     printf("End user input thread\n");
     pthread_exit(NULL);
+    return NULL;
 }
 
 void* SpawnAudioThread(void* arg) {
@@ -277,6 +278,7 @@ void* SpawnAudioThread(void* arg) {
     printf("End audio thread\n");
     timer_delete(timerid);
     pthread_exit(NULL);
+    return NULL;
 }
 
 void CtrlCHandler(int sigNum) {
